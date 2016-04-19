@@ -36,6 +36,9 @@ var ForgotPassword = module.exports = function(config, adapter) {
   this.config = config;
   this.adapter = adapter;
 
+  this.emailField = config.emailField ? config.emailField : 'email';
+  this.nameField = config.nameField ? config.nameField : 'name';
+
   // set default route
   var route = config.forgotPassword.route || '/forgot-password';
 
@@ -93,6 +96,8 @@ ForgotPassword.prototype.getForgot = function(req, res, next) {
 ForgotPassword.prototype.postForgot = function(req, res, next) {
   var config = this.config;
   var adapter = this.adapter;
+  var emailField = this.emailField;
+  var nameField = this.nameField;
   var that = this;
 
   var email = req.body.email;
@@ -122,7 +127,7 @@ ForgotPassword.prototype.postForgot = function(req, res, next) {
   // looks like given email address has the correct format
 
   // look for user in db
-  adapter.find('email', email, function(err, user) {
+  adapter.find(emailField, email, function(err, user) {
     if (err) {return next(err); }
 
     // custom or built-in view
@@ -155,7 +160,7 @@ ForgotPassword.prototype.postForgot = function(req, res, next) {
 
       // send email with forgot password link
       var mail = new Mail(config);
-      mail.forgot(usr.name, usr.email, token, function(e) {
+      mail.forgot(usr[nameField], usr[emailField], token, function(e) {
         if (e) {return next(e); }
 
         // emit event
@@ -225,9 +230,7 @@ ForgotPassword.prototype.getToken = function(req, res, next) {
           title: 'Forgot password - Link expired',
           basedir: req.app.get('views')
         });
-
       });
-
     }
 
     // send only JSON when REST is active
