@@ -42,10 +42,13 @@ var ForgotPassword = module.exports = function(config, adapter) {
 
   // set default route
   var route = config.forgotPassword.route || '/forgot-password';
-  var routeLogin = config.forgotPassword.route || '/forgot-login';
+  var routeLogin = config.forgotPassword.routeLogin || '/forgot-login';
 
   // add prefix when rest is active
-  if (config.rest) {route = '/rest' + route; }
+  if (config.rest) {
+    route = '/rest' + route;
+    routeLogin = '/rest' + routeLogin;
+  }
 
   /**
    * Routes
@@ -278,7 +281,7 @@ ForgotPassword.prototype.postForgotLogin = function(req, res, next) {
       if (!user) {
         // send only JSON when REST is active
         if (config.rest) {
-          return res.send(204);
+          return res.json(204, {message: 'No User with recovery address: ' + recoverySearch});
         }
 
         return res.render(view, {
@@ -292,17 +295,17 @@ ForgotPassword.prototype.postForgotLogin = function(req, res, next) {
 
       // If mail is recovery method, email a recover link?
       var mail = new Mail(config);
-      mail.forgot(user[nameField], user[recoverySearch], user[emailField], function (e) {
+      mail.forgotLogin(user[nameField], recoverySearch, [user[emailField]], function (e) {
         if (e) {
           return next(e);
         }
 
         // emit event
-        that.emit('forgotEmail::sent', user, res);
+        that.emit('forgotLogin::sent', user, res);
 
         // send only JSON when REST is active
         if (config.rest) {
-          return res.send(204);
+          return res.json(200, {success: true, email: user[emailField]});
         }
 
         res.render(view, {
@@ -312,8 +315,6 @@ ForgotPassword.prototype.postForgotLogin = function(req, res, next) {
       });
     });
   }
-
-
 };
 
 /**
