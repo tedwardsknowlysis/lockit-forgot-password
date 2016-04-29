@@ -281,7 +281,7 @@ ForgotPassword.prototype.postForgotLogin = function(req, res, next) {
       if (!user) {
         // send only JSON when REST is active
         if (config.rest) {
-          return res.json(204, {message: 'No User with recovery address: ' + recoverySearch});
+          return res.json(204, {message: 'No User with recovery: ' + recoverySearch});
         }
 
         return res.render(view, {
@@ -290,7 +290,12 @@ ForgotPassword.prototype.postForgotLogin = function(req, res, next) {
         });
       }
 
-      // TODO: If phone number used Text recovery...
+      // If phone number used Text recovery...
+      if (req.body[recoveryPhoneField]) {
+        // emit event
+        that.emit('forgot::text', user, recoverySearch, res);
+        return res.json(204, {message: 'No User with recovery: ' + recoverySearch});
+      }
       // TODO: If another method is used, figure out what to do there...?
 
       // If mail is recovery method, email a recover link?
