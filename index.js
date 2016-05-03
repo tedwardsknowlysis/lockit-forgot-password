@@ -8,7 +8,7 @@ var uuid = require('node-uuid');
 var pwd = require('couch-pwd');
 var ms = require('ms');
 var moment = require('moment');
-var Mail = require('lockit-sendmail');
+var Mail = undefined;
 
 /**
  * Internal helper functions
@@ -24,6 +24,9 @@ function join(view) {
  * @param {Object} adapter
  */
 var ForgotPassword = module.exports = function(config, adapter) {
+  if (!config.forgotPassword.customMail) {
+    Mail = require('lockit-sendmail');
+  }
 
   if (!(this instanceof ForgotPassword)) {return new ForgotPassword(config, adapter); }
 
@@ -161,23 +164,39 @@ ForgotPassword.prototype.postForgot = function(req, res, next) {
     adapter.update(user, function(er, usr) {
       if (er) {return next(er); }
 
+      that.emit('forgot::email', usr, res);
       // send email with forgot password link
-      var mail = new Mail(config);
-      mail.forgot(usr[nameField], usr[emailField], token, function(e) {
-        if (e) {return next(e); }
+      if (Mail) {
+        var mail = new Mail(config);
+        mail.forgot(usr[nameField], usr[emailField], token, function (e) {
+          if (e) {
+            return next(e);
+          }
 
-        // emit event
-        that.emit('forgot::sent', usr, res);
+          // emit event
+          that.emit('forgot::sent', usr, res);
 
+          // send only JSON when REST is active
+          if (config.rest) {
+            return res.send(204);
+          }
+
+          res.render(view, {
+            title: 'Forgot password',
+            basedir: req.app.get('views')
+          });
+        });
+      } else {
         // send only JSON when REST is active
-        if (config.rest) {return res.send(204); }
+        if (config.rest) {
+          return res.send(204);
+        }
 
         res.render(view, {
           title: 'Forgot password',
           basedir: req.app.get('views')
         });
-      });
-
+      }
     });
 
   });
@@ -293,21 +312,34 @@ ForgotPassword.prototype.postForgotLogin = function(req, res, next) {
       // If phone number used Text recovery...
       if (req.body[recoveryPhoneField]) {
         // emit event
-        that.emit('forgot::text', user, recoverySearch, res);
+        that.emit('forgotlogin::text', user, recoverySearch, res);
         return res.json(204, {message: 'No User with recovery: ' + recoverySearch});
       }
       // TODO: If another method is used, figure out what to do there...?
 
-      // If mail is recovery method, email a recover link?
-      var mail = new Mail(config);
-      mail.forgotLogin(user[nameField], recoverySearch, [user[emailField]], function (e) {
-        if (e) {
-          return next(e);
-        }
+      that.emit('forgotlogin::email', user, recoverySearch, res);
+      if (Mail) {
+        // If mail is recovery method, email a recover link?
+        var mail = new Mail(config);
+        mail.forgotLogin(user[nameField], recoverySearch, [user[emailField]], function (e) {
+          if (e) {
+            return next(e);
+          }
 
-        // emit event
-        that.emit('forgotLogin::sent', user, res);
+          // emit event
+          that.emit('forgotlogin::sent', user, recoverySearch, res);
 
+          // send only JSON when REST is active
+          if (config.rest) {
+            return res.json(200, {success: true, email: user[emailField]});
+          }
+
+          res.render(view, {
+            title: 'Forgot login',
+            basedir: req.app.get('views')
+          });
+        });
+      } else {
         // send only JSON when REST is active
         if (config.rest) {
           return res.json(200, {success: true, email: user[emailField]});
@@ -317,7 +349,7 @@ ForgotPassword.prototype.postForgotLogin = function(req, res, next) {
           title: 'Forgot login',
           basedir: req.app.get('views')
         });
-      });
+      }
     });
   }
 };
